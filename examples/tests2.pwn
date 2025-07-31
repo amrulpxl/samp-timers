@@ -158,7 +158,11 @@ forward MyIntegerCallback(value);
 public MyIntegerCallback(value)
 {
     printf("Received integer parameter: %d", value);
-    printf("Expected: 42, Actual: %d, Match: %s", value, (value == 42) ? "YES" : "NO");
+    if (value == 42) {
+        printf("Expected: 42, Actual: %d, Match: YES", value);
+    } else {
+        printf("Expected: 42, Actual: %d, Match: NO", value);
+    }
 }
 
 forward MyFloatCallback(Float:value);
@@ -174,7 +178,11 @@ public MyStringCallback(const message[])
 {
     printf("Received string parameter: '%s'", message);
     printf("String length: %d characters", strlen(message));
-    printf("Expected: 'Hello World from Timer!', Match: %s", (strcmp(message, "Hello World from Timer!") == 0) ? "YES" : "NO");
+    if (strcmp(message, "Hello World from Timer!") == 0) {
+        printf("Expected: 'Hello World from Timer!', Match: YES");
+    } else {
+        printf("Expected: 'Hello World from Timer!', Match: NO");
+    }
 }
 
 forward MyNoParameterCallback();
@@ -221,15 +229,23 @@ public MyEdgeCaseCallback(large_number)
 {
     printf("Received large number: %d", large_number);
     printf("Expected: 2147483647 (MAX_INT)");
-    printf("Match: %s", (large_number == 2147483647) ? "YES" : "NO");
-    printf("Negative test: %d", large_number < 0 ? 1 : 0);
+    if (large_number == 2147483647) {
+        printf("Match: YES");
+    } else {
+        printf("Match: NO");
+    }
+    printf("Negative test: %d", (large_number < 0));
 }
 
 forward MyPlayerSpecificCallback(playerid);
 public MyPlayerSpecificCallback(playerid)
 {
     printf("Target player ID: %d", playerid);
-    printf("Player connected: %s", IsPlayerConnected(playerid) ? "YES" : "NO");
+    if (IsPlayerConnected(playerid)) {
+        printf("Player connected: YES");
+    } else {
+        printf("Player connected: NO");
+    }
 
     if (IsPlayerConnected(playerid)) {
         new player_name[MAX_PLAYER_NAME];
