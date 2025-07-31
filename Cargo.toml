@@ -1,0 +1,35 @@
+[package]
+name = "samp-timers"
+version = "1.0.1"
+authors = ["SA-MP Timer Plugin Developer"]
+edition = "2021"
+description = "A timer plugins for SA-MP"
+license = "MIT"
+repository = "https://github.com/your-repo/samp-timers"
+
+[lib]
+name = "timers"
+crate-type = ["cdylib"]
+
+[dependencies]
+samp = "0.1.2"
+tokio = { version = "1.0", features = ["full"] }
+dashmap = "5.5"
+once_cell = "1.19"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.6", features = ["v4"] }
+parking_lot = "0.12"
+thiserror = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winbase", "processthreadsapi"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
