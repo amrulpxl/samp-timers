@@ -1,12 +1,16 @@
 /*
- * Timers Included
+ * SA-MP Timers Plugin Include File
  * Version: 1.0.1
+ * 
  * Features:
  * - Async timer execution with tokio runtime
  * - Thread-safe timer management
  * - Support for both repeating and one-shot timers
- * - Parameter passing to callback functions
+ * - Parameter passing to callback functions (integer, float, string)
  * - Automatic cleanup of expired timers
+ * 
+ * Author: Amrul
+ * License: MIT
  */
 
 #if defined _timers_included
@@ -28,6 +32,13 @@
 #define TIMER_ERROR_INTERNAL         -99 // Internal error
 
 /*
+ * Parameter Type Constants
+ */
+#define TIMER_PARAM_INTEGER          0   // Integer parameter
+#define TIMER_PARAM_FLOAT            1   // Float parameter  
+#define TIMER_PARAM_STRING           2   // String parameter
+
+/*
  * Native function declarations
  */
 
@@ -47,10 +58,10 @@ native Timer_Set(delay_ms, bool:repeat, const callback[]);
  * @param delay_ms     Delay in milliseconds (must be positive)
  * @param repeat       Whether the timer should repeat (true) or run once (false)
  * @param callback     Name of the callback function to execute
- * @param param_type   Parameter type (0=integer, 1=float, 2=string)
- * @param int_param    Integer parameter (used if param_type=0)
- * @param float_param  Float parameter (used if param_type=1)
- * @param string_param String parameter (used if param_type=2)
+ * @param param_type   Parameter type (TIMER_PARAM_INTEGER/FLOAT/STRING)
+ * @param int_param    Integer parameter (used if param_type=TIMER_PARAM_INTEGER)
+ * @param float_param  Float parameter (used if param_type=TIMER_PARAM_FLOAT)
+ * @param string_param String parameter (used if param_type=TIMER_PARAM_STRING)
  * @return             Timer ID on success, negative error code on failure
  */
 native Timer_SetEx(delay_ms, bool:repeat, const callback[], param_type, int_param, Float:float_param, const string_param[]);
@@ -69,10 +80,10 @@ native Timer_SetOnce(delay_ms, const callback[]);
  *
  * @param delay_ms     Delay in milliseconds (must be positive)
  * @param callback     Name of the callback function to execute
- * @param param_type   Parameter type (0=integer, 1=float, 2=string)
- * @param int_param    Integer parameter (used if param_type=0)
- * @param float_param  Float parameter (used if param_type=1)
- * @param string_param String parameter (used if param_type=2)
+ * @param param_type   Parameter type (TIMER_PARAM_INTEGER/FLOAT/STRING)
+ * @param int_param    Integer parameter (used if param_type=TIMER_PARAM_INTEGER)
+ * @param float_param  Float parameter (used if param_type=TIMER_PARAM_FLOAT)
+ * @param string_param String parameter (used if param_type=TIMER_PARAM_STRING)
  * @return             Timer ID on success, negative error code on failure
  */
 native Timer_SetOnceEx(delay_ms, const callback[], param_type, int_param, Float:float_param, const string_param[]);
@@ -108,6 +119,11 @@ native Timer_GetInfo(timerid);
  * Check if a timer operation was successful
  */
 #define IsValidTimerID(%0) (%0 > 0)
+
+/**
+ * Check if a timer operation failed
+ */
+#define IsTimerError(%0) (%0 < 0)
 
 /**
  * Get error message for timer error code

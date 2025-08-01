@@ -10,6 +10,34 @@ pub struct TimerPlugin {
     timer_manager: TimerManager,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum TimerParamType {
+    Integer,
+    Float,
+    String,
+}
+
+impl TimerParamType {
+    fn from_i32(val: i32) -> Option<Self> {
+        match val {
+            0 => Some(TimerParamType::Integer),
+            1 => Some(TimerParamType::Float),
+            2 => Some(TimerParamType::String),
+            _ => None,
+        }
+    }
+}
+
+fn build_callback_data(param_type: TimerParamType, int_param: i32, float_param: f32, string_param: &str) -> callback::CallbackData {
+    let mut callback_data = callback::CallbackData::new();
+    match param_type {
+        TimerParamType::Integer => callback_data.add_param(callback::CallbackParam::Integer(int_param)),
+        TimerParamType::Float => callback_data.add_param(callback::CallbackParam::Float(float_param)),
+        TimerParamType::String => callback_data.add_param(callback::CallbackParam::String(string_param.to_string())),
+    }
+    callback_data
+}
+
 impl SampPlugin for TimerPlugin {
     fn on_load(&mut self) {
         tracing::info!("Timers Plugin v1.0.1 has been loaded");
@@ -32,7 +60,12 @@ impl TimerPlugin {
         repeat: bool,
         callback: AmxString,
     ) -> AmxResult<i32> {
-        match self.timer_manager.create_timer(delay_ms, repeat, callback.to_string(), None) {
+        let callback_str = callback.to_string();
+        if !callback::is_valid_callback_name(&callback_str) {
+            tracing::error!("Invalid callback name: {}", callback_str);
+            return Ok(crate::error::TimerError::InvalidCallback(callback_str).to_error_code());
+        }
+        match self.timer_manager.create_timer(delay_ms, repeat, callback_str, None) {
             Ok(timer_id) => {
                 tracing::debug!("Created timer {} with delay {}ms, repeat: {}", timer_id, delay_ms, repeat);
                 Ok(timer_id)
@@ -55,24 +88,20 @@ impl TimerPlugin {
         float_param: f32,
         string_param: AmxString,
     ) -> AmxResult<i32> {
-        if !callback::is_valid_callback_name(&callback.to_string()) {
-            tracing::error!("Invalid callback name: {}", callback.to_string());
-            return Ok(crate::error::TimerError::InvalidCallback(callback.to_string()).to_error_code());
+        let callback_str = callback.to_string();
+        if !callback::is_valid_callback_name(&callback_str) {
+            tracing::error!("Invalid callback name: {}", callback_str);
+            return Ok(crate::error::TimerError::InvalidCallback(callback_str).to_error_code());
         }
-
-        let mut callback_data = callback::CallbackData::new();
-
-        match param_type {
-            0 => callback_data.add_param(callback::CallbackParam::Integer(int_param)),
-            1 => callback_data.add_param(callback::CallbackParam::Float(float_param)),
-            2 => callback_data.add_param(callback::CallbackParam::String(string_param.to_string())),
-            _ => {
+        let param_type_enum = match TimerParamType::from_i32(param_type) {
+            Some(pt) => pt,
+            None => {
                 tracing::error!("Invalid parameter type: {}", param_type);
                 return Ok(crate::error::TimerError::ParameterParseError("Invalid parameter type".to_string()).to_error_code());
             }
-        }
-
-        match self.timer_manager.create_timer(delay_ms, repeat, callback.to_string(), Some(callback_data)) {
+        };
+        let callback_data = build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string());
+        match self.timer_manager.create_timer(delay_ms, repeat, callback_str, Some(callback_data)) {
             Ok(timer_id) => {
                 tracing::debug!("Created timer {} with parameter type {}", timer_id, param_type);
                 Ok(timer_id)
@@ -90,7 +119,12 @@ impl TimerPlugin {
         delay_ms: i32,
         callback: AmxString,
     ) -> AmxResult<i32> {
-        match self.timer_manager.create_timer(delay_ms, false, callback.to_string(), None) {
+        let callback_str = callback.to_string();
+        if !callback::is_valid_callback_name(&callback_str) {
+            tracing::error!("Invalid callback name: {}", callback_str);
+            return Ok(crate::error::TimerError::InvalidCallback(callback_str).to_error_code());
+        }
+        match self.timer_manager.create_timer(delay_ms, false, callback_str, None) {
             Ok(timer_id) => {
                 tracing::debug!("Created one-shot timer {} with delay {}ms", timer_id, delay_ms);
                 Ok(timer_id)
@@ -112,25 +146,21 @@ impl TimerPlugin {
         float_param: f32,
         string_param: AmxString,
     ) -> AmxResult<i32> {
-        if !callback::is_valid_callback_name(&callback.to_string()) {
-            let error = crate::error::TimerError::InvalidCallback(callback.to_string());
+        let callback_str = callback.to_string();
+        if !callback::is_valid_callback_name(&callback_str) {
+            let error = crate::error::TimerError::InvalidCallback(callback_str);
             tracing::error!("Timer creation failed: {}", error.to_user_message());
             return Ok(error.to_error_code());
         }
-
-        let mut callback_data = callback::CallbackData::new();
-
-        match param_type {
-            0 => callback_data.add_param(callback::CallbackParam::Integer(int_param)),
-            1 => callback_data.add_param(callback::CallbackParam::Float(float_param)),
-            2 => callback_data.add_param(callback::CallbackParam::String(string_param.to_string())),
-            _ => {
+        let param_type_enum = match TimerParamType::from_i32(param_type) {
+            Some(pt) => pt,
+            None => {
                 tracing::error!("Invalid parameter type: {}", param_type);
                 return Ok(crate::error::TimerError::ParameterParseError("Invalid parameter type".to_string()).to_error_code());
             }
-        }
-
-        match self.timer_manager.create_timer(delay_ms, false, callback.to_string(), Some(callback_data)) {
+        };
+        let callback_data = build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string());
+        match self.timer_manager.create_timer(delay_ms, false, callback_str, Some(callback_data)) {
             Ok(timer_id) => {
                 tracing::debug!("Created one-shot timer {} with parameter type {}", timer_id, param_type);
                 Ok(timer_id)

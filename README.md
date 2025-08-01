@@ -46,22 +46,43 @@ Creates a new timer with specified delay and repeat behavior.
 - **callback**: Name of the callback function
 - **Returns**: Timer ID on success, negative error code on failure
 
-#### `Timer_SetEx(delay_ms, bool:repeat, const callback[], const format[], ...)`
-Creates a timer with parameters for the callback.
+#### `Timer_SetEx(delay_ms, bool:repeat, const callback[], param_type, int_param, Float:float_param, const string_param[])`
+Creates a timer with typed parameters for the callback.
 
-- **format**: Parameter format string (`i`=integer, `f`=float, `s`=string)
-- **...**: Parameters to pass to the callback
+- **param_type**: Parameter type (0=integer, 1=float, 2=string)
+- **int_param**: Integer parameter (used if param_type=0)
+- **float_param**: Float parameter (used if param_type=1)
+- **string_param**: String parameter (used if param_type=2)
+- **Returns**: Timer ID on success, negative error code on failure
 
 #### `Timer_SetOnce(delay_ms, const callback[])`
 Convenience function for creating one-shot timers.
 
-#### `Timer_SetOnceEx(delay_ms, const callback[], const format[], ...)`
-One-shot timer with parameters.
+#### `Timer_SetOnceEx(delay_ms, const callback[], param_type, int_param, Float:float_param, const string_param[])`
+One-shot timer with typed parameters.
 
 #### `Timer_Kill(timerid)`
 Kills/stops a timer by its ID.
 
 - **Returns**: `true` if successful, `false` otherwise
+
+#### `Timer_GetActiveCount()`
+Gets the number of currently active timers.
+
+- **Returns**: Number of active timers
+
+#### `Timer_GetInfo(timerid)`
+Gets information about a timer.
+
+- **Returns**: Timer delay in milliseconds, or -1 if timer not found
+
+### Utility Functions
+
+#### `IsValidTimerID(timerid)`
+Checks if a timer operation was successful.
+
+#### `GetTimerErrorMessage(error_code)`
+Gets a human-readable error message for an error code.
 
 ### Error Codes
 
@@ -76,6 +97,12 @@ Kills/stops a timer by its ID.
 | -7 | `TIMER_ERROR_CALLBACK_EXEC` | Callback execution failed |
 | -8 | `TIMER_ERROR_ID_OVERFLOW` | Timer ID overflow |
 | -99 | `TIMER_ERROR_INTERNAL` | Internal error |
+
+## Examples
+
+See the `examples/` directory for complete usage examples:
+- `tests.pwn` - Basic timer usage with player management
+- `tests2.pwn` - Comprehensive parameter testing
 
 ## License
 

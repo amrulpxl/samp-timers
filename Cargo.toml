@@ -1,11 +1,11 @@
 [package]
 name = "samp-timers"
 version = "1.0.1"
-authors = ["SA-MP Timer Plugin Developer"]
+authors = ["Amrul Hadi <amrulhadi@outlook.co.id>"]
 edition = "2021"
 description = "A timer plugins for SA-MP"
 license = "MIT"
-repository = "https://github.com/your-repo/samp-timers"
+repository = "https://github.com/amrulpxl/samp-timers"
 
 [lib]
 name = "timers"

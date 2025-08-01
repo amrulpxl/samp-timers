@@ -1,9 +1,14 @@
 #include <a_samp>
 #include <timers>
 
+#if !defined _timers_included
+    #error "This gamemode requires timers.inc to be included"
+#endif
+
 main(){}
 
-new g_TestTimers[10] = {-1, ...};
+#define MAX_TEST_TIMERS 10
+new g_TestTimers[MAX_TEST_TIMERS] = {-1, ...};
 new g_TestCounter = 0;
 
 public OnGameModeInit()
@@ -79,10 +84,11 @@ public OnGameModeInit()
 
 public OnGameModeExit()
 {
-    for (new i = 0; i < sizeof(g_TestTimers); i++) {
+    for (new i = 0; i < MAX_TEST_TIMERS; i++) {
         if (IsValidTimerID(g_TestTimers[i])) {
             if (Timer_Kill(g_TestTimers[i])) {
                 printf("Killed timer %d", g_TestTimers[i]);
+                g_TestTimers[i] = -1;
             }
         }
     }
@@ -92,23 +98,39 @@ public OnGameModeExit()
 
 public OnPlayerConnect(playerid)
 {
+    if (playerid < 0 || playerid >= MAX_PLAYERS) {
+        printf("ERROR: Invalid playerid %d in OnPlayerConnect", playerid);
+        return 0;
+    }
+
     printf("[PLAYER EVENT] Player %d connected, creating personalized timer...", playerid);
     new personal_timer = Timer_SetOnceEx(1000, "MyPlayerSpecificCallback", 0, playerid, 0.0, "");
     if (IsValidTimerID(personal_timer)) {
         printf("Created personal timer %d for player %d", personal_timer, playerid);
+    } else {
+        printf("Failed to create personal timer for player %d: %s", playerid, GetTimerErrorMessage(personal_timer));
     }
     return 1;
 }
 
 public OnPlayerCommandText(playerid, cmdtext[])
 {
+    if (playerid < 0 || playerid >= MAX_PLAYERS) {
+        printf("ERROR: Invalid playerid %d in OnPlayerCommandText", playerid);
+        return 0;
+    }
+
     if (strcmp("/testdebug", cmdtext, true) == 0) {
         printf("[DEBUG CMD] Player %d requested debug test", playerid);
         
         new debug_timer = Timer_SetOnceEx(500, "MyDebugCallback", 0, playerid, 0.0, "");
-        SendClientMessage(playerid, 0x00FF00FF, "Debug timer created! Check console.");
-        
-        printf("Debug timer %d created for player %d", debug_timer, playerid);
+        if (IsValidTimerID(debug_timer)) {
+            SendClientMessage(playerid, 0x00FF00FF, "Debug timer created! Check console.");
+            printf("Debug timer %d created for player %d", debug_timer, playerid);
+        } else {
+            SendClientMessage(playerid, 0xFF0000FF, "Failed to create debug timer!");
+            printf("Failed to create debug timer for player %d: %s", playerid, GetTimerErrorMessage(debug_timer));
+        }
         return 1;
     }
     
@@ -116,7 +138,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
         printf("[KILL CMD] Player %d requested to kill all test timers", playerid);
         new killed_count = 0;
         
-        for (new i = 0; i < sizeof(g_TestTimers); i++) {
+        for (new i = 0; i < MAX_TEST_TIMERS; i++) {
             if (IsValidTimerID(g_TestTimers[i])) {
                 if (Timer_Kill(g_TestTimers[i])) {
                     killed_count++;
@@ -142,11 +164,31 @@ public OnPlayerCommandText(playerid, cmdtext[])
         
         printf("[INFO CMD] Current active timer count: %d", active_count);
         
-        for (new i = 0; i < sizeof(g_TestTimers); i++) {
+        for (new i = 0; i < MAX_TEST_TIMERS; i++) {
             if (IsValidTimerID(g_TestTimers[i])) {
                 new delay = Timer_GetInfo(g_TestTimers[i]);
-                printf("[INFO CMD] Timer slot %d: ID=%d, delay=%dms", i, g_TestTimers[i], delay);
+                if (delay != -1) {
+                    printf("[INFO CMD] Timer slot %d: ID=%d, delay=%dms (ACTIVE)", i, g_TestTimers[i], delay);
+                } else {
+                    printf("[INFO CMD] Timer slot %d: ID=%d (COMPLETED/KILLED)", i, g_TestTimers[i]);
+                }
+            } else {
+                printf("[INFO CMD] Timer slot %d: No timer", i);
             }
+        }
+        return 1;
+    }
+    
+    if (strcmp("/sethp", cmdtext, true) == 0) {
+        printf("[HP CMD] Player %d requested to set HP to 50", playerid);
+        
+        if (IsPlayerConnected(playerid)) {
+            SetPlayerHealth(playerid, 50.0);
+            SendClientMessage(playerid, 0x00FF00FF, "Your health has been set to 50 HP!");
+            printf("[HP CMD] Set player %d health to 50.0", playerid);
+        } else {
+            SendClientMessage(playerid, 0xFF0000FF, "You are not connected!");
+            printf("[HP CMD] Player %d is not connected", playerid);
         }
         return 1;
     }
@@ -241,17 +283,11 @@ forward MyPlayerSpecificCallback(playerid);
 public MyPlayerSpecificCallback(playerid)
 {
     printf("Target player ID: %d", playerid);
-    if (IsPlayerConnected(playerid)) {
+    if (playerid >= 0 && playerid < MAX_PLAYERS && IsPlayerConnected(playerid)) {
         printf("Player connected: YES");
-    } else {
-        printf("Player connected: NO");
-    }
-
-    if (IsPlayerConnected(playerid)) {
         new player_name[MAX_PLAYER_NAME];
         GetPlayerName(playerid, player_name, sizeof(player_name));
         printf("Player name: %s", player_name);
-
         SendClientMessage(playerid, 0x00FF00FF, "Your personal timer has executed!");
     } else {
         printf("Player %d is no longer connected", playerid);
@@ -265,7 +301,7 @@ public MyDebugCallback(playerid)
     printf("Current timestamp: %d", gettime());
     printf("Active timer count: %d", Timer_GetActiveCount());
 
-    if (IsPlayerConnected(playerid)) {
+    if (playerid >= 0 && playerid < MAX_PLAYERS && IsPlayerConnected(playerid)) {
         SendClientMessage(playerid, 0xFFFF00FF, "Debug callback executed successfully!");
         printf("Debug message sent to player %d", playerid);
     }
@@ -274,7 +310,7 @@ public MyDebugCallback(playerid)
 stock GetPlayerNameEx(playerid)
 {
     new name[MAX_PLAYER_NAME];
-    if (IsPlayerConnected(playerid)) {
+    if (playerid >= 0 && playerid < MAX_PLAYERS && IsPlayerConnected(playerid)) {
         GetPlayerName(playerid, name, sizeof(name));
     } else {
         format(name, sizeof(name), "Player(%d)", playerid);
@@ -287,7 +323,7 @@ stock PrintTimerStats()
     printf("Active timers: %d", Timer_GetActiveCount());
 
     new valid_count = 0;
-    for (new i = 0; i < sizeof(g_TestTimers); i++) {
+    for (new i = 0; i < MAX_TEST_TIMERS; i++) {
         if (IsValidTimerID(g_TestTimers[i])) {
             valid_count++;
             new delay = Timer_GetInfo(g_TestTimers[i]);
@@ -295,5 +331,22 @@ stock PrintTimerStats()
         }
     }
 
-    printf("Valid test timers: %d/%d", valid_count, sizeof(g_TestTimers));
+    printf("Valid test timers: %d/%d", valid_count, MAX_TEST_TIMERS);
+}
+
+stock GetTimerStatusString(timerid, dest[], max_len = sizeof(dest))
+{
+    if (!IsValidTimerID(timerid)) {
+        format(dest, max_len, "Invalid timer ID");
+        return 0;
+    }
+    
+    new delay = Timer_GetInfo(timerid);
+    if (delay == -1) {
+        format(dest, max_len, "Timer not found");
+        return 0;
+    }
+    
+    format(dest, max_len, "Timer %d: %dms delay", timerid, delay);
+    return 1;
 }

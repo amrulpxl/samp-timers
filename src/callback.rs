@@ -32,6 +32,9 @@ pub async fn execute_callback(
         return Err(TimerError::InvalidCallback(callback_name.to_string()));
     }
 
+    println!("--- EXECUTING CALLBACK: {} ---", callback_name);
+    tracing::info!("--- EXECUTING CALLBACK: {} ---", callback_name);
+
     match params {
         Some(callback_data) => {
             println!("TIMER CALLBACK: {} with {} parameters", callback_name, callback_data.params.len());
@@ -59,34 +62,36 @@ pub async fn execute_callback(
             tracing::info!("TIMER CALLBACK: {} (no parameters)", callback_name);
         }
     }
+
     tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
 
-    println!("TIMER CALLBACK: {} executed successfully", callback_name);
-    tracing::info!("TIMER CALLBACK: {} executed successfully", callback_name);
-
+    println!("--- CALLBACK COMPLETED: {} ---", callback_name);
+    tracing::info!("--- CALLBACK COMPLETED: {} ---", callback_name);
     Ok(())
 }
 
 pub fn is_valid_callback_name(name: &str) -> bool {
+    if name != name.trim() {
+        return false;
+    }
+
     let trimmed = name.trim();
 
-    // Check if empty
     if trimmed.is_empty() {
         return false;
     }
 
-    // Check length (reasonable limit)
     if trimmed.len() > 64 {
         return false;
     }
 
-    // Check first character (must be letter or underscore)
-    let first_char = trimmed.chars().next().unwrap();
-    if !first_char.is_alphabetic() && first_char != '_' {
+    if let Some(first_char) = trimmed.chars().next() {
+        if !first_char.is_alphabetic() && first_char != '_' {
+            return false;
+        }
+    } else {
         return false;
     }
-
-    // Check all characters (alphanumeric or underscore only)
     trimmed.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -105,6 +110,7 @@ mod tests {
         assert!(!is_valid_callback_name("123invalid"));
         assert!(!is_valid_callback_name("invalid-name"));
         assert!(!is_valid_callback_name("invalid name"));
+        assert!(!is_valid_callback_name("   ")); 
     }
 
     #[test]
@@ -117,5 +123,22 @@ mod tests {
         data.add_param(CallbackParam::String("test".to_string()));
         
         assert_eq!(data.params.len(), 3);
+    }
+
+    #[test]
+    fn test_edge_case_callback_names() {
+        let long_name = "a".repeat(65);
+        assert!(!is_valid_callback_name(&long_name));
+        
+        let exact_name = "a".repeat(64);
+        assert!(is_valid_callback_name(&exact_name));
+        
+        assert!(is_valid_callback_name("a"));
+        assert!(is_valid_callback_name("_"));
+        assert!(!is_valid_callback_name("1abc"));
+        assert!(!is_valid_callback_name("-abc"));
+        assert!(!is_valid_callback_name(" abc")); //leading space should be invalid
+        assert!(!is_valid_callback_name("abc ")); //trailing space should be invalid
+        assert!(!is_valid_callback_name(" abc ")); //both spaces should be invalid
     }
 }
