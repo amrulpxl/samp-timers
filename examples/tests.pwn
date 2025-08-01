@@ -21,7 +21,7 @@ public OnGameModeInit()
         printf("Server heartbeat timer created with ID: %d", g_ServerTimer);
     }
     
-    g_AnnouncementTimer = Timer_SetEx(300000, true, "OnServerAnnouncement", 2, 0, 0.0, "Welcome to our server!");
+    g_AnnouncementTimer = Timer_SetEx(300000, true, "OnServerAnnouncement", TIMER_PARAM_STRING, 0, 0.0, "Welcome to our server!");
     if (!IsValidTimerID(g_AnnouncementTimer)) {
         printf("ERROR: Failed to create announcement timer: %s", GetTimerErrorMessage(g_AnnouncementTimer));
     }
@@ -71,17 +71,17 @@ public OnPlayerConnect(playerid)
         return 0;
     }
 
-    new welcome_timer = Timer_SetOnceEx(2000, "OnPlayerWelcome", 0, playerid, 0.0, "");
+    new welcome_timer = Timer_SetOnceEx(2000, "OnPlayerWelcome", TIMER_PARAM_INTEGER, playerid, 0.0, "");
     if (!IsValidTimerID(welcome_timer)) {
         printf("Failed to create welcome timer for player %d: %s", playerid, GetTimerErrorMessage(welcome_timer));
     }
 
-    g_PlayerTimers[playerid] = Timer_SetEx(5000, true, "OnPlayerHealthRegen", 0, playerid, 0.0, "");
+    g_PlayerTimers[playerid] = Timer_SetEx(5000, true, "OnPlayerHealthRegen", TIMER_PARAM_INTEGER, playerid, 0.0, "");
     if (!IsValidTimerID(g_PlayerTimers[playerid])) {
         printf("Failed to create health regen timer for player %d: %s", playerid, GetTimerErrorMessage(g_PlayerTimers[playerid]));
     }
 
-    g_LastHealthRegen[playerid] = 0; 
+    g_LastHealthRegen[playerid] = gettime();
 
     return 1;
 }
@@ -99,7 +99,7 @@ public OnPlayerDisconnect(playerid, reason)
         printf("Cleaned up timer for player %d", playerid);
     }
     
-    g_LastHealthRegen[playerid] = 0; 
+    g_LastHealthRegen[playerid] = gettime();
     
     return 1;
 }
@@ -113,7 +113,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (strcmp("/testtimer", cmdtext, true) == 0) {
         printf("[CMD] Player %d used /testtimer command", playerid);
-        new timer_id = Timer_SetOnceEx(3000, "OnTestTimer", 0, playerid, 0.0, "");
+        new timer_id = Timer_SetOnceEx(3000, "OnTestTimer", TIMER_PARAM_INTEGER, playerid, 0.0, "");
 
         if (IsValidTimerID(timer_id)) {
             printf("[CMD] Successfully created test timer %d for player %d", timer_id, playerid);
@@ -130,7 +130,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (strcmp("/testfloat", cmdtext, true) == 0) {
         printf("[CMD] Player %d used /testfloat command", playerid);
-        new timer_id = Timer_SetOnceEx(2000, "OnFloatTest", 1, 0, 3.14159, "");
+        new timer_id = Timer_SetOnceEx(2000, "OnFloatTest", TIMER_PARAM_FLOAT, 0, 3.14159, "");
 
         if (IsValidTimerID(timer_id)) {
             printf("[CMD] Successfully created float timer %d for player %d", timer_id, playerid);
@@ -147,7 +147,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
 
     if (strcmp("/teststring", cmdtext, true) == 0) {
         printf("[CMD] Player %d used /teststring command", playerid);
-        new timer_id = Timer_SetOnceEx(1500, "OnStringTest", 2, 0, 0.0, "Hello from timer!");
+        new timer_id = Timer_SetOnceEx(1500, "OnStringTest", TIMER_PARAM_STRING, 0, 0.0, "Hello from timer!");
 
         if (IsValidTimerID(timer_id)) {
             printf("[CMD] Successfully created string timer %d for player %d", timer_id, playerid);
@@ -192,7 +192,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
             printf("[CMD] Killed existing timer for player %d", playerid);
         }
        
-        g_PlayerTimers[playerid] = Timer_SetEx(5000, true, "OnPlayerHealthRegen", 0, playerid, 0.0, "");
+        g_PlayerTimers[playerid] = Timer_SetEx(5000, true, "OnPlayerHealthRegen", TIMER_PARAM_INTEGER, playerid, 0.0, "");
         if (IsValidTimerID(g_PlayerTimers[playerid])) {
             printf("[CMD] Successfully restarted timer %d for player %d", g_PlayerTimers[playerid], playerid);
             SendClientMessage(playerid, 0x00FF00FF, "Health regeneration timer restarted (5 second interval).");
@@ -293,7 +293,7 @@ public OnPlayerHealthRegen(playerid)
 
         if (health < 100.0 && health > 0.0) {
             printf("[HEALTH] Player %d: health is low, checking cooldown...", playerid);
-            if (time_since_last >= 0) { 
+            if (time_since_last >= 5) {
                 new Float:new_health = health + 10.0;
                 if (new_health > 100.0) new_health = 100.0;
 
@@ -302,7 +302,7 @@ public OnPlayerHealthRegen(playerid)
                 g_LastHealthRegen[playerid] = current_time;
 
                 printf("[HEALTH] Player %d health regenerated: %.1f -> %.1f", playerid, health, new_health);
-                
+
                 if (new_health - health >= 5.0) {
                     new message[64];
                     format(message, sizeof(message), "Health regenerated: %.1f", new_health);
@@ -310,7 +310,7 @@ public OnPlayerHealthRegen(playerid)
                     printf("[HEALTH] Player %d: sent health regen message", playerid);
                 }
             } else {
-                printf("[HEALTH] Player %d: cooldown active (%d seconds remaining)", playerid, 0 - time_since_last);
+                printf("[HEALTH] Player %d: cooldown active (%d seconds remaining)", playerid, 5 - time_since_last);
             }
         } else {
             printf("[HEALTH] Player %d: health is %.1f (no regen needed)", playerid, health);

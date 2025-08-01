@@ -120,46 +120,35 @@ impl TimerManager {
     }
 
     pub fn kill_timer(&self, timer_id: i32) -> TimerResult<()> {
-        println!("[TIMER] Attempting to kill timer {}", timer_id);
-        
         if let Some(timer_entry) = self.timers.get(&timer_id) {
             let timer_arc = timer_entry.value().clone();
-            
+
             if let Some(timer_guard) = timer_arc.try_read() {
                 if let Some(ref handle) = timer_guard.task_handle {
-                    println!("[TIMER] Aborting task for timer {}", timer_id);
                     handle.abort();
                 }
-            } else {
-                println!("[TIMER] Could not acquire read lock for timer {}, proceeding with removal", timer_id);
             }
-            
+
             self.timers.remove(&timer_id);
-            println!("[TIMER] Timer {} killed and removed from map", timer_id);
             tracing::debug!("Timer {} killed and removed", timer_id);
             Ok(())
         } else {
-            println!("[TIMER] Timer {} not found in map", timer_id);
             Err(TimerError::TimerNotFound(timer_id))
         }
     }
 
     pub fn shutdown(&self) {
         if self.shutdown_complete.load(Ordering::Acquire) {
-            return; 
+            return;
         }
 
         SHUTDOWN_FLAG.store(true, Ordering::Release);
-        
+
         let timer_ids: Vec<i32> = self.timers.iter().map(|entry| *entry.key()).collect();
         let total_timers = timer_ids.len();
 
         for timer_id in timer_ids {
             let _ = self.kill_timer(timer_id);
-        }
-
-        if let Ok(runtime) = Arc::try_unwrap(self.runtime.clone()) {
-            runtime.shutdown_timeout(Duration::from_secs(5));
         }
 
         self.shutdown_complete.store(true, Ordering::Release);
@@ -197,53 +186,45 @@ impl TimerManager {
         };
 
         let delay = Duration::from_millis(delay_ms);
-        println!("[TIMER] Timer {} started: delay={}ms, repeat={}, callback={}", timer_id, delay_ms, repeat, callback);
 
         loop {
             if SHUTDOWN_FLAG.load(Ordering::Acquire) {
-                println!("[TIMER] Timer {} shutting down", timer_id);
                 break;
             }
 
-            println!("[TIMER] Timer {} sleeping for {}ms", timer_id, delay_ms);
             sleep(delay).await;
 
             if SHUTDOWN_FLAG.load(Ordering::Acquire) {
-                println!("[TIMER] Timer {} shutting down after sleep", timer_id);
                 break;
             }
 
             if !timers.contains_key(&timer_id) {
-                println!("[TIMER] Timer {} was killed during sleep, stopping task", timer_id);
-                break;
+                tracing::debug!("Timer {} was killed during sleep, stopping task", timer_id);
+                return; 
             }
 
-            println!("[TIMER] Timer {} executing callback: {}", timer_id, callback);
             if let Err(e) = execute_callback(&callback, &params).await {
-                println!("[TIMER] Timer {} callback execution failed: {}", timer_id, e);
                 tracing::error!("Timer {} callback execution failed: {}", timer_id, e);
                 if !repeat {
                     tracing::error!("One-shot timer {} failed: {}", timer_id,
                                   TimerError::CallbackExecutionError(format!("Callback '{}' failed: {}", callback, e)));
-                    break; 
+                    break;
                 }
-            } else {
-                println!("[TIMER] Timer {} callback executed successfully", timer_id);
             }
 
             if !timers.contains_key(&timer_id) {
-                println!("[TIMER] Timer {} was killed during callback, stopping task", timer_id);
-                break;
+                tracing::debug!("Timer {} was killed during callback execution, stopping task", timer_id);
+                return; 
             }
 
             if !repeat {
-                println!("[TIMER] Timer {} is one-shot, stopping", timer_id);
                 break;
             }
         }
-        timers.remove(&timer_id);
-        println!("[TIMER] Timer {} task completed and cleaned up", timer_id);
-        tracing::debug!("Timer {} task completed and cleaned up", timer_id);
+        if timers.contains_key(&timer_id) {
+            timers.remove(&timer_id);
+            tracing::debug!("Timer {} task completed and cleaned up", timer_id);
+        }
     }
 }
 
@@ -251,6 +232,14 @@ impl Drop for TimerManager {
     fn drop(&mut self) {
         if !self.shutdown_complete.load(Ordering::Acquire) {
             self.shutdown();
+        }
+
+        if let Ok(runtime) = Arc::try_unwrap(std::mem::replace(&mut self.runtime, Arc::new(
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("Failed to create dummy runtime")
+        ))) {
+            runtime.shutdown_timeout(Duration::from_secs(2));
         }
     }
 }

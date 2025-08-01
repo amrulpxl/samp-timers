@@ -75,24 +75,23 @@ pub fn is_valid_callback_name(name: &str) -> bool {
         return false;
     }
 
-    let trimmed = name.trim();
-
-    if trimmed.is_empty() {
+    if name.is_empty() {
         return false;
     }
 
-    if trimmed.len() > 64 {
+    if name.len() > 64 {
         return false;
     }
 
-    if let Some(first_char) = trimmed.chars().next() {
+    if let Some(first_char) = name.chars().next() {
         if !first_char.is_alphabetic() && first_char != '_' {
             return false;
         }
     } else {
         return false;
     }
-    trimmed.chars().all(|c| c.is_alphanumeric() || c == '_')
+
+    name.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
 #[cfg(test)]

@@ -14,23 +14,23 @@ new g_TestCounter = 0;
 public OnGameModeInit()
 {
     printf("[TEST 1] Creating timer with integer parameter...");
-    g_TestTimers[0] = Timer_SetOnceEx(2000, "MyIntegerCallback", 0, 42, 0.0, "");
+    g_TestTimers[0] = Timer_SetOnceEx(2000, "MyIntegerCallback", TIMER_PARAM_INTEGER, 42, 0.0, "");
     if (IsValidTimerID(g_TestTimers[0])) {
         printf("SUCCESS: Integer timer created with ID %d", g_TestTimers[0]);
     } else {
         printf("FAILED: Integer timer creation failed: %s", GetTimerErrorMessage(g_TestTimers[0]));
     }
-    
+
     printf("[TEST 2] Creating timer with float parameter...");
-    g_TestTimers[1] = Timer_SetOnceEx(3000, "MyFloatCallback", 1, 0, 3.14159265, "");
+    g_TestTimers[1] = Timer_SetOnceEx(3000, "MyFloatCallback", TIMER_PARAM_FLOAT, 0, 3.14159265, "");
     if (IsValidTimerID(g_TestTimers[1])) {
         printf("SUCCESS: Float timer created with ID %d", g_TestTimers[1]);
     } else {
         printf("FAILED: Float timer creation failed: %s", GetTimerErrorMessage(g_TestTimers[1]));
     }
-    
+
     printf("[TEST 3] Creating timer with string parameter...");
-    g_TestTimers[2] = Timer_SetOnceEx(4000, "MyStringCallback", 2, 0, 0.0, "Hello World from Timer!");
+    g_TestTimers[2] = Timer_SetOnceEx(4000, "MyStringCallback", TIMER_PARAM_STRING, 0, 0.0, "Hello World from Timer!");
     if (IsValidTimerID(g_TestTimers[2])) {
         printf("SUCCESS: String timer created with ID %d", g_TestTimers[2]);
     } else {
@@ -46,20 +46,20 @@ public OnGameModeInit()
     }
     
     printf("[TEST 5] Creating repeating timer with integer parameter...");
-    g_TestTimers[4] = Timer_SetEx(6000, true, "MyRepeatingCallback", 0, 100, 0.0, "");
+    g_TestTimers[4] = Timer_SetEx(6000, true, "MyRepeatingCallback", TIMER_PARAM_INTEGER, 100, 0.0, "");
     if (IsValidTimerID(g_TestTimers[4])) {
         printf("SUCCESS: Repeating timer created with ID %d", g_TestTimers[4]);
     } else {
         printf("FAILED: Repeating timer creation failed: %s", GetTimerErrorMessage(g_TestTimers[4]));
     }
-    
+
     printf("[TEST 6] Creating timer with mixed parameter types...");
-    g_TestTimers[5] = Timer_SetOnceEx(7000, "MyMixedParametersCallback", 0, 999, 0.0, "");
-    g_TestTimers[6] = Timer_SetOnceEx(7500, "MyMixedParametersCallback", 1, 0, 2.71828, "");
-    g_TestTimers[7] = Timer_SetOnceEx(8000, "MyMixedParametersCallback", 2, 0, 0.0, "Mixed Test");
-    
+    g_TestTimers[5] = Timer_SetOnceEx(7000, "MyMixedParametersCallback", TIMER_PARAM_INTEGER, 999, 0.0, "");
+    g_TestTimers[6] = Timer_SetOnceEx(7500, "MyMixedParametersCallback", TIMER_PARAM_FLOAT, 0, 2.71828, "");
+    g_TestTimers[7] = Timer_SetOnceEx(8000, "MyMixedParametersCallback", TIMER_PARAM_STRING, 0, 0.0, "Mixed Test");
+
     printf("[TEST 7] Creating timer with edge case values...");
-    g_TestTimers[8] = Timer_SetOnceEx(9000, "MyEdgeCaseCallback", 0, 2147483647, 0.0, ""); // MAX_INT
+    g_TestTimers[8] = Timer_SetOnceEx(9000, "MyEdgeCaseCallback", TIMER_PARAM_INTEGER, 2147483647, 0.0, ""); // MAX_INT
     
     printf("[TEST 8] Testing error cases...");
     new error_timer1 = Timer_Set(-1000, false, "InvalidDelay"); 
@@ -104,7 +104,7 @@ public OnPlayerConnect(playerid)
     }
 
     printf("[PLAYER EVENT] Player %d connected, creating personalized timer...", playerid);
-    new personal_timer = Timer_SetOnceEx(1000, "MyPlayerSpecificCallback", 0, playerid, 0.0, "");
+    new personal_timer = Timer_SetOnceEx(1000, "MyPlayerSpecificCallback", TIMER_PARAM_INTEGER, playerid, 0.0, "");
     if (IsValidTimerID(personal_timer)) {
         printf("Created personal timer %d for player %d", personal_timer, playerid);
     } else {
@@ -123,7 +123,7 @@ public OnPlayerCommandText(playerid, cmdtext[])
     if (strcmp("/testdebug", cmdtext, true) == 0) {
         printf("[DEBUG CMD] Player %d requested debug test", playerid);
         
-        new debug_timer = Timer_SetOnceEx(500, "MyDebugCallback", 0, playerid, 0.0, "");
+        new debug_timer = Timer_SetOnceEx(500, "MyDebugCallback", TIMER_PARAM_INTEGER, playerid, 0.0, "");
         if (IsValidTimerID(debug_timer)) {
             SendClientMessage(playerid, 0x00FF00FF, "Debug timer created! Check console.");
             printf("Debug timer %d created for player %d", debug_timer, playerid);
