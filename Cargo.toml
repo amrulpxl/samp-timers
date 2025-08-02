@@ -1,6 +1,6 @@
 [package]
 name = "samp-timers"
-version = "1.0.1"
+version = "1.0.2"
 authors = ["Amrul Hadi <amrulhadi@outlook.co.id>"]
 edition = "2021"
 description = "A timer plugins for SA-MP"
@@ -10,6 +10,10 @@ repository = "https://github.com/amrulpxl/samp-timers"
 [lib]
 name = "timers"
 crate-type = ["cdylib"]
+
+[package.metadata.docs.rs]
+default-target = "i686-pc-windows-msvc"
+targets = ["i686-pc-windows-msvc"]
 
 [dependencies]
 samp = "0.1.2"
@@ -21,6 +25,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1.6", features = ["v4"] }
 parking_lot = "0.12"
 thiserror = "1.0"
+lazy_static = "1.4"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winbase", "processthreadsapi"] }
@@ -33,3 +38,5 @@ panic = "abort"
 
 [profile.dev]
 opt-level = 1
+
+[build-dependencies]

@@ -4,8 +4,12 @@ use samp::{initialize_plugin, native};
 mod timer;
 mod error;
 mod callback;
+mod amx_manager;
 
 use timer::TimerManager;
+use error::{TimerError, TimerResult};
+use amx_manager::AmxManager;
+
 pub struct TimerPlugin {
     timer_manager: TimerManager,
 }
@@ -28,25 +32,53 @@ impl TimerParamType {
     }
 }
 
-fn build_callback_data(param_type: TimerParamType, int_param: i32, float_param: f32, string_param: &str) -> callback::CallbackData {
-    let mut callback_data = callback::CallbackData::new();
-    match param_type {
-        TimerParamType::Integer => callback_data.add_param(callback::CallbackParam::Integer(int_param)),
-        TimerParamType::Float => callback_data.add_param(callback::CallbackParam::Float(float_param)),
-        TimerParamType::String => callback_data.add_param(callback::CallbackParam::String(string_param.to_string())),
+fn validate_timer_params(delay_ms: i32, callback: &str) -> TimerResult<()> {
+    if delay_ms <= 0 {
+        return Err(TimerError::InvalidDelay(delay_ms));
     }
-    callback_data
+
+    if !callback::is_valid_callback_name(callback) {
+        return Err(TimerError::InvalidCallback(callback.to_string()));
+    }
+
+    Ok(())
+}
+
+fn build_callback_data(param_type: TimerParamType, int_param: i32, float_param: f32, string_param: &str) -> TimerResult<callback::CallbackData> {
+    let mut callback_data = callback::CallbackData::with_capacity(1);
+
+    let param = match param_type {
+        TimerParamType::Integer => callback::CallbackParam::Integer(int_param),
+        TimerParamType::Float => {
+            if !float_param.is_finite() {
+                return Err(TimerError::ParameterValidation("Float parameter must be finite".to_string()));
+            }
+            callback::CallbackParam::Float(float_param)
+        },
+        TimerParamType::String => {
+            if string_param.len() > 1024 {
+                return Err(TimerError::ParameterValidation("String parameter too long".to_string()));
+            }
+            callback::CallbackParam::String(string_param.to_string())
+        },
+    };
+
+    callback_data.add_param(param)?;
+    Ok(callback_data)
 }
 
 impl SampPlugin for TimerPlugin {
     fn on_load(&mut self) {
-        tracing::info!("Timers Plugin v1.0.1 has been loaded");
+        tracing::info!("Timers Plugin v1.0.2 has been loaded");
         tracing::info!("timer plugins initialized");
     }
 
     fn on_unload(&mut self) {
         tracing::info!("SA-MP Timers Plugin unloading...");
         self.timer_manager.shutdown();
+
+        AmxManager::clear_all_instances();
+
         tracing::info!("All timers stopped and cleaned up");
     }
 }
@@ -55,22 +87,16 @@ impl TimerPlugin {
     #[native(name = "Timer_Set")]
     pub fn timer_set(
         &mut self,
-        _amx: &Amx,
+        amx: &Amx,
         delay_ms: i32,
         repeat: bool,
         callback: AmxString,
     ) -> AmxResult<i32> {
+        AmxManager::register_amx(amx);
         let callback_str = callback.to_string();
 
-        if delay_ms <= 0 {
-            let error = crate::error::TimerError::InvalidDelay(delay_ms);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
-            return Ok(error.to_error_code());
-        }
-
-        if !callback::is_valid_callback_name(&callback_str) {
-            let error = crate::error::TimerError::InvalidCallback(callback_str);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
+        if let Err(error) = validate_timer_params(delay_ms, &callback_str) {
+            tracing::error!("Timer creation failed: {}", error);
             return Ok(error.to_error_code());
         }
 
@@ -80,7 +106,11 @@ impl TimerPlugin {
                 Ok(timer_id)
             }
             Err(e) => {
-                tracing::error!("Failed to create timer: {}", e.to_user_message());
+                if e.is_recoverable() {
+                    tracing::warn!("Recoverable timer creation error: {}", e);
+                } else {
+                    tracing::error!("Fatal timer creation error: {}", e);
+                }
                 Ok(e.to_error_code())
             }
         }
@@ -92,42 +122,46 @@ impl TimerPlugin {
         delay_ms: i32,
         repeat: bool,
         callback: AmxString,
-        param_type: i32, // 0=int, 1=float, 2=string
+        param_type: i32, /* 0=int, 1=float, 2=string */
         int_param: i32,
         float_param: f32,
         string_param: AmxString,
     ) -> AmxResult<i32> {
         let callback_str = callback.to_string();
 
-        if delay_ms <= 0 {
-            let error = crate::error::TimerError::InvalidDelay(delay_ms);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
-            return Ok(error.to_error_code());
-        }
-
-        if !callback::is_valid_callback_name(&callback_str) {
-            let error = crate::error::TimerError::InvalidCallback(callback_str);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
+        if let Err(error) = validate_timer_params(delay_ms, &callback_str) {
+            tracing::error!("Timer creation failed: {}", error);
             return Ok(error.to_error_code());
         }
 
         let param_type_enum = match TimerParamType::from_i32(param_type) {
             Some(pt) => pt,
             None => {
-                let error = crate::error::TimerError::ParameterParseError(format!("Invalid parameter type: {}", param_type));
-                tracing::error!("Timer creation failed: {}", error.to_user_message());
+                let error = TimerError::ParameterParseError(format!("Invalid parameter type: {}", param_type));
+                tracing::error!("Timer creation failed: {}", error);
                 return Ok(error.to_error_code());
             }
         };
 
-        let callback_data = build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string());
+        let callback_data = match build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string()) {
+            Ok(data) => data,
+            Err(error) => {
+                tracing::error!("Timer creation failed: {}", error);
+                return Ok(error.to_error_code());
+            }
+        };
+
         match self.timer_manager.create_timer(delay_ms, repeat, callback_str, Some(callback_data)) {
             Ok(timer_id) => {
                 tracing::debug!("Created timer {} with parameter type {}", timer_id, param_type);
                 Ok(timer_id)
             }
             Err(e) => {
-                tracing::error!("Failed to create timer with parameters: {}", e.to_user_message());
+                if e.is_recoverable() {
+                    tracing::warn!("Recoverable timer creation error with parameters: {}", e);
+                } else {
+                    tracing::error!("Fatal timer creation error with parameters: {}", e);
+                }
                 Ok(e.to_error_code())
             }
         }
@@ -140,16 +174,8 @@ impl TimerPlugin {
         callback: AmxString,
     ) -> AmxResult<i32> {
         let callback_str = callback.to_string();
-
-        if delay_ms <= 0 {
-            let error = crate::error::TimerError::InvalidDelay(delay_ms);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
-            return Ok(error.to_error_code());
-        }
-
-        if !callback::is_valid_callback_name(&callback_str) {
-            let error = crate::error::TimerError::InvalidCallback(callback_str);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
+        if let Err(error) = validate_timer_params(delay_ms, &callback_str) {
+            tracing::error!("Timer creation failed: {}", error);
             return Ok(error.to_error_code());
         }
 
@@ -159,7 +185,7 @@ impl TimerPlugin {
                 Ok(timer_id)
             }
             Err(e) => {
-                tracing::error!("Failed to create one-shot timer: {}", e.to_user_message());
+                tracing::error!("Failed to create one-shot timer: {}", e);
                 Ok(e.to_error_code())
             }
         }
@@ -170,42 +196,42 @@ impl TimerPlugin {
         _amx: &Amx,
         delay_ms: i32,
         callback: AmxString,
-        param_type: i32, // 0=int, 1=float, 2=string
+        param_type: i32, /* 0=int, 1=float, 2=string */
         int_param: i32,
         float_param: f32,
         string_param: AmxString,
     ) -> AmxResult<i32> {
         let callback_str = callback.to_string();
 
-        if delay_ms <= 0 {
-            let error = crate::error::TimerError::InvalidDelay(delay_ms);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
+        if let Err(error) = validate_timer_params(delay_ms, &callback_str) {
+            tracing::error!("Timer creation failed: {}", error);
             return Ok(error.to_error_code());
         }
 
-        if !callback::is_valid_callback_name(&callback_str) {
-            let error = crate::error::TimerError::InvalidCallback(callback_str);
-            tracing::error!("Timer creation failed: {}", error.to_user_message());
-            return Ok(error.to_error_code());
-        }
-        
         let param_type_enum = match TimerParamType::from_i32(param_type) {
             Some(pt) => pt,
             None => {
-                let error = crate::error::TimerError::ParameterParseError(format!("Invalid parameter type: {}", param_type));
-                tracing::error!("Timer creation failed: {}", error.to_user_message());
+                let error = TimerError::ParameterParseError(format!("Invalid parameter type: {}", param_type));
+                tracing::error!("Timer creation failed: {}", error);
                 return Ok(error.to_error_code());
             }
         };
 
-        let callback_data = build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string());
+        let callback_data = match build_callback_data(param_type_enum, int_param, float_param, &string_param.to_string()) {
+            Ok(data) => data,
+            Err(error) => {
+                tracing::error!("Timer creation failed: {}", error);
+                return Ok(error.to_error_code());
+            }
+        };
+
         match self.timer_manager.create_timer(delay_ms, false, callback_str, Some(callback_data)) {
             Ok(timer_id) => {
                 tracing::debug!("Created one-shot timer {} with parameter type {}", timer_id, param_type);
                 Ok(timer_id)
             }
             Err(e) => {
-                tracing::error!("Failed to create one-shot timer with parameters: {}", e.to_user_message());
+                tracing::error!("Failed to create one-shot timer with parameters: {}", e);
                 Ok(e.to_error_code())
             }
         }
@@ -227,6 +253,13 @@ impl TimerPlugin {
     pub fn timer_get_active_count(&self, _amx: &Amx) -> AmxResult<i32> {
         let count = self.timer_manager.active_timer_count();
         tracing::debug!("Active timer count: {}", count);
+        Ok(count as i32)
+    }
+
+    #[native(name = "Timer_GetAmxInstanceCount")]
+    pub fn timer_get_amx_instance_count(&self, _amx: &Amx) -> AmxResult<i32> {
+        let count = AmxManager::instance_count();
+        tracing::debug!("AMX instance count: {}", count);
         Ok(count as i32)
     }
     #[native(name = "Timer_GetInfo")]
@@ -254,6 +287,7 @@ initialize_plugin!(
         TimerPlugin::timer_set_once_ex,
         TimerPlugin::timer_kill,
         TimerPlugin::timer_get_active_count,
+        TimerPlugin::timer_get_amx_instance_count,
         TimerPlugin::timer_get_info,
     ],
     {

@@ -1,10 +1,37 @@
 use crate::error::{TimerError, TimerResult};
+use crate::amx_manager::AmxManager;
+
+const MAX_CALLBACK_PARAMS: usize = 16;
+const MAX_STRING_PARAM_LENGTH: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub enum CallbackParam {
     Integer(i32),
     Float(f32),
     String(String),
+}
+
+impl CallbackParam {
+    pub fn validate(&self) -> TimerResult<()> {
+        match self {
+            CallbackParam::String(s) => {
+                if s.len() > MAX_STRING_PARAM_LENGTH {
+                    return Err(TimerError::ParameterValidation(
+                        format!("String parameter too long: {} > {} chars", s.len(), MAX_STRING_PARAM_LENGTH)
+                    ));
+                }
+            }
+            CallbackParam::Float(f) => {
+                if !f.is_finite() {
+                    return Err(TimerError::ParameterValidation(
+                        "Float parameter must be finite (not NaN or infinite)".to_string()
+                    ));
+                }
+            }
+            CallbackParam::Integer(_) => {} /* always valid */
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -15,12 +42,37 @@ pub struct CallbackData {
 impl CallbackData {
     pub fn new() -> Self {
         CallbackData {
-            params: Vec::new(),
+            params: Vec::with_capacity(4), /* pre-allocate for common case */
         }
     }
 
-    pub fn add_param(&mut self, param: CallbackParam) {
+    pub fn with_capacity(capacity: usize) -> Self {
+        if capacity <= 4 {
+            Self::new()
+        } else {
+            CallbackData {
+                params: Vec::with_capacity(capacity.min(MAX_CALLBACK_PARAMS)),
+            }
+        }
+    }
+
+    pub fn add_param(&mut self, param: CallbackParam) -> TimerResult<()> {
+        if self.params.len() >= MAX_CALLBACK_PARAMS {
+            return Err(TimerError::ParameterValidation(
+                format!("Too many parameters: {} > {}", self.params.len() + 1, MAX_CALLBACK_PARAMS)
+            ));
+        }
+
+        param.validate()?;
         self.params.push(param);
+        Ok(())
+    }
+
+    pub fn validate(&self) -> TimerResult<()> {
+        for param in &self.params {
+            param.validate()?;
+        }
+        Ok(())
     }
 }
 
@@ -32,41 +84,61 @@ pub async fn execute_callback(
         return Err(TimerError::InvalidCallback(callback_name.to_string()));
     }
 
-    println!("--- EXECUTING CALLBACK: {} ---", callback_name);
-    tracing::info!("--- EXECUTING CALLBACK: {} ---", callback_name);
+    if let Some(callback_data) = params {
+        callback_data.validate()?;
+    }
 
-    match params {
-        Some(callback_data) => {
-            println!("TIMER CALLBACK: {} with {} parameters", callback_name, callback_data.params.len());
-            tracing::info!("TIMER CALLBACK: {} with {} parameters", callback_name, callback_data.params.len());
+    tracing::debug!("Executing callback: {} with {} parameters",
+                   callback_name,
+                   params.as_ref().map_or(0, |p| p.params.len()));
 
-            for (i, param) in callback_data.params.iter().enumerate() {
-                match param {
-                    CallbackParam::Integer(val) => {
-                        println!("  Parameter {}: integer = {}", i, val);
-                        tracing::info!("  Parameter {}: integer = {}", i, val);
-                    }
-                    CallbackParam::Float(val) => {
-                        println!("  Parameter {}: float = {:.6}", i, val);
-                        tracing::info!("  Parameter {}: float = {:.6}", i, val);
-                    }
-                    CallbackParam::String(val) => {
-                        println!("  Parameter {}: string = '{}'", i, val);
-                        tracing::info!("  Parameter {}: string = '{}'", i, val);
+    let execution_start = std::time::Instant::now();
+
+    if !AmxManager::has_instances() {
+        tracing::warn!("No AMX instances available, simulating callback execution for: {}", callback_name);
+
+        match params {
+            Some(callback_data) => {
+                tracing::trace!("Simulated callback {} parameters:", callback_name);
+                for (i, param) in callback_data.params.iter().enumerate() {
+                    match param {
+                        CallbackParam::Integer(val) => {
+                            tracing::trace!("  [{}]: integer = {}", i, val);
+                        }
+                        CallbackParam::Float(val) => {
+                            tracing::trace!("  [{}]: float = {:.6}", i, val);
+                        }
+                        CallbackParam::String(val) => {
+                            tracing::trace!("  [{}]: string = '{}' (len={})", i, val, val.len());
+                        }
                     }
                 }
             }
+            None => {
+                tracing::trace!("Simulated callback {} has no parameters", callback_name);
+            }
         }
-        None => {
-            println!("TIMER CALLBACK: {} (no parameters)", callback_name);
-            tracing::info!("TIMER CALLBACK: {} (no parameters)", callback_name);
+    } else {
+        tracing::debug!("Executing actual SAMP callback: {}", callback_name);
+
+        match AmxManager::execute_callback(callback_name, params) {
+            Ok(return_value) => {
+                tracing::debug!("Callback {} returned: {}", callback_name, return_value);
+            }
+            Err(e) => {
+                tracing::error!("Callback {} execution failed: {}", callback_name, e);
+                return Err(e);
+            }
         }
     }
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+    let execution_time = execution_start.elapsed();
+    tracing::debug!("Callback {} completed in {:?}", callback_name, execution_time);
 
-    println!("--- CALLBACK COMPLETED: {} ---", callback_name);
-    tracing::info!("--- CALLBACK COMPLETED: {} ---", callback_name);
+    if execution_time.as_millis() > 10 {
+        tracing::warn!("Slow callback execution: {} took {:?}", callback_name, execution_time);
+    }
+
     Ok(())
 }
 
@@ -116,12 +188,27 @@ mod tests {
     fn test_callback_data_creation() {
         let mut data = CallbackData::new();
         assert_eq!(data.params.len(), 0);
-        
-        data.add_param(CallbackParam::Integer(42));
-        data.add_param(CallbackParam::Float(3.14));
-        data.add_param(CallbackParam::String("test".to_string()));
-        
+
+        data.add_param(CallbackParam::Integer(42)).expect("Failed to add integer param");
+        data.add_param(CallbackParam::Float(3.14)).expect("Failed to add float param");
+        data.add_param(CallbackParam::String("test".to_string())).expect("Failed to add string param");
+
         assert_eq!(data.params.len(), 3);
+    }
+
+    #[test]
+    fn test_callback_data_with_capacity() {
+        let mut data = CallbackData::with_capacity(2);
+        assert_eq!(data.params.len(), 0);
+        assert!(data.params.capacity() >= 2);
+
+        data.add_param(CallbackParam::Integer(100)).expect("Failed to add integer param");
+        data.add_param(CallbackParam::String("capacity_test".to_string())).expect("Failed to add string param");
+
+        assert_eq!(data.params.len(), 2);
+
+        let data_new = CallbackData::new();
+        assert_eq!(data_new.params.len(), 0);
     }
 
     #[test]

@@ -73,12 +73,19 @@ public OnGameModeInit()
     
     printf("[TEST 9] Testing timer management functions...");
     printf("Active timer count: %d", Timer_GetActiveCount());
-    
+    printf("AMX instance count: %d", Timer_GetAmxInstanceCount());
+
     if (IsValidTimerID(g_TestTimers[0])) {
         new delay = Timer_GetInfo(g_TestTimers[0]);
         printf("Timer %d info - delay: %d ms", g_TestTimers[0], delay);
     }
-    printf("Watch console for callback executions...");  
+    printf("Watch console for callback executions...");
+
+    new cleanup_timer = Timer_SetOnce(60000, "AutoCleanupTimers"); 
+    if (IsValidTimerID(cleanup_timer)) {
+        printf("Auto-cleanup timer set for 60 seconds");
+    }
+
     return 1;
 }
 
@@ -93,6 +100,7 @@ public OnGameModeExit()
         }
     }
     printf("Cleanup complete. Final active count: %d", Timer_GetActiveCount());
+    printf("Final AMX instance count: %d", Timer_GetAmxInstanceCount());
     return 1;
 }
 
@@ -192,7 +200,21 @@ public OnPlayerCommandText(playerid, cmdtext[])
         }
         return 1;
     }
-    
+
+    if (strcmp("/cmdlist", cmdtext, true) == 0) {
+        printf("[CMD] Player %d used /cmdlist command", playerid);
+
+        SendClientMessage(playerid, 0x00FFFFFF, "=== SA-MP Timers Plugin Test Commands ===");
+        SendClientMessage(playerid, 0x00FF00FF, "/testdebug - Create a debug timer (500ms delay)");
+        SendClientMessage(playerid, 0x00FF00FF, "/killall - Kill all test timers");
+        SendClientMessage(playerid, 0x00FF00FF, "/timerinfo - Show active timer count and timer slots");
+        SendClientMessage(playerid, 0x00FF00FF, "/sethp - Set your health to 50 HP");
+        SendClientMessage(playerid, 0x00FF00FF, "/cmdlist - Show this command list");
+
+        printf("[CMD] Displayed command list to player %d", playerid);
+        return 1;
+    }
+
     return 0;
 }
 
@@ -349,4 +371,21 @@ stock GetTimerStatusString(timerid, dest[], max_len = sizeof(dest))
     
     format(dest, max_len, "Timer %d: %dms delay", timerid, delay);
     return 1;
+}
+
+forward AutoCleanupTimers();
+public AutoCleanupTimers()
+{
+    new cleaned_count = 0;
+    for (new i = 0; i < MAX_TEST_TIMERS; i++) {
+        if (IsValidTimerID(g_TestTimers[i])) {
+            if (Timer_Kill(g_TestTimers[i])) {
+                printf("Auto-cleaned timer %d (slot %d)", g_TestTimers[i], i);
+                g_TestTimers[i] = -1;
+                cleaned_count++;
+            }
+        }
+    }
+    printf("active timer count: %d", Timer_GetActiveCount());
+    printf("AMX instance count: %d", Timer_GetAmxInstanceCount());
 }

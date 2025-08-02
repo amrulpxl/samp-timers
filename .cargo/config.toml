@@ -1,0 +1,16 @@
+[build]
+target = "i686-pc-windows-msvc"
+
+[target.i686-pc-windows-msvc]
+rustflags = [
+    "-C", "target-feature=+crt-static",
+    "-C", "link-args=/SUBSYSTEM:WINDOWS",
+]
+
+[target.i686-pc-windows-gnu]
+rustflags = [
+    "-C", "target-feature=+crt-static",
+]
+
+[env]
+CARGO_CFG_TARGET_ARCH = "x86"
